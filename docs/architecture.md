@@ -23,7 +23,7 @@ flowchart LR
     end
     db[("PostgreSQL<br/>accounts · ledger_entries<br/>idempotency_keys · outbox_messages")]
     broker["Broker de eventos<br/>(Service Bus / Kafka)"]
-    otel["Observabilidade<br/>(OTLP: traces, métricas, logs)"]
+    otel["Observabilidade (OTLP: traces, métricas, logs)<br/>local: Aspire Dashboard<br/>produção: Prometheus/Grafana ou Azure Monitor"]
 
     client -- "JWT" --> http
     idp -. "chaves de assinatura" .-> http
@@ -169,7 +169,9 @@ Ver [ADR 0008](adr/0008-seguranca.md).
 
 ## 8. Observabilidade
 
-OpenTelemetry com traces (ASP.NET Core + Npgsql), métricas e logs estruturados, exportados via OTLP quando `OTEL_EXPORTER_OTLP_ENDPOINT` está definido. Métricas de negócio:
+> **Observabilidade técnica fica com OpenTelemetry exportando via OTLP; localmente para o Aspire Dashboard, em produção para Prometheus/Grafana ou Azure Monitor sem mudar código.**
+
+A API emite traces (ASP.NET Core + Npgsql), métricas e logs estruturados, e exporta via OTLP quando `OTEL_EXPORTER_OTLP_ENDPOINT` está definido. O destino é configuração: a aplicação não conhece nenhum backend. Métricas de negócio:
 
 | Métrica | Uso |
 |---|---|
@@ -178,3 +180,10 @@ OpenTelemetry com traces (ASP.NET Core + Npgsql), métricas e logs estruturados,
 | `ledger.idempotent.replays` | Sinal de retries de clientes (rede instável, timeouts) |
 
 O `correlation_id` gravado em cada lançamento é o trace id da requisição, ligando o registro contábil ao trace distribuído.
+
+Spans do Npgsql só são gerados dentro de um trace existente: o polling do outbox, que roda sem trace pai, não polui a visão com um trace por segundo.
+
+| Ambiente | Destino OTLP | Por quê |
+|---|---|---|
+| Local | .NET Aspire Dashboard standalone (profile `observability` do docker-compose) | Um único container, sem configuração, cobrindo os três sinais. Sem persistência nem alertas, o que é aceitável para desenvolvimento e avaliação. Escolhido em vez de Prometheus + Grafana, que exigiria dois containers e configuração extra. |
+| Produção | OpenTelemetry Collector → Prometheus/Grafana (com Tempo/Loki) ou Azure Monitor | Persistência, retenção, dashboards e alertas. A troca é apontar `OTEL_EXPORTER_OTLP_ENDPOINT` para o collector, sem mudança de código. |

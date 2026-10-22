@@ -25,8 +25,22 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__Ledger: "Host=postgres;Port=5432;Database=ledger;Username=ledger;Password=ledger_dev_only"
+      # Sem o profile "observability" o dashboard não sobe e o exporter descarta a telemetria
+      # em background, sem afetar as requisições.
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://aspire-dashboard:18889"
     ports:
       - "8080:8080"
+
+  # Opcional: docker compose --profile observability up
+  # Dashboard de desenvolvimento (traces, métricas e logs via OTLP, em memória). Não é stack de produção.
+  aspire-dashboard:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:13.0
+    profiles: [observability]
+    environment:
+      ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"
+    ports:
+      - "18888:18888" # interface web
+      - "4317:18889"  # OTLP gRPC, para a API rodando via dotnet run
 
 volumes:
   ledger-data:

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Ledger.Application;
 using Ledger.Infrastructure.Outbox;
 using Ledger.Infrastructure.Persistence;
@@ -37,8 +38,13 @@ public static class DependencyInjection
                 CommandTimeout = (int)Math.Ceiling(db.StatementTimeoutMs / 1000d) + 1,
             };
 
+            // Só gera span para comandos dentro de um trace existente (requisição HTTP). O polling do
+            // outbox roda sem trace pai e, a cada segundo, viraria um trace solto que soterra os reais.
             return new NpgsqlDataSourceBuilder(builder.ConnectionString)
                 .UseLoggerFactory(sp.GetRequiredService<ILoggerFactory>())
+                .ConfigureTracing(tracing => tracing
+                    .ConfigureCommandFilter(_ => Activity.Current is not null)
+                    .ConfigureBatchFilter(_ => Activity.Current is not null))
                 .Build();
         });
 

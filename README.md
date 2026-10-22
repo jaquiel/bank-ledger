@@ -49,6 +49,29 @@ dotnet run --project src/Ledger.Api --launch-profile http
 
 A connection string de desenvolvimento está em `src/Ledger.Api/appsettings.Development.json` e aponta para `localhost:5432`.
 
+### Observabilidade (opcional)
+
+Sobe junto o [.NET Aspire Dashboard](https://learn.microsoft.com/dotnet/aspire/fundamentals/dashboard/standalone), que recebe OTLP e mostra traces, métricas e logs da API:
+
+```bash
+docker compose --profile observability up --build
+```
+
+- Dashboard: http://localhost:18888
+
+Com a API via `dotnet run`, suba só o dashboard (`docker compose --profile observability up -d aspire-dashboard`) e defina `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317` antes de rodar.
+
+Observabilidade técnica fica com OpenTelemetry exportando via OTLP; localmente para o Aspire Dashboard, em produção para Prometheus/Grafana ou Azure Monitor sem mudar código. O dashboard guarda tudo em memória e não tem alertas: é ferramenta de desenvolvimento, não substitui o stack de produção.
+
+### Parar e limpar
+
+```bash
+docker compose --profile observability down      # para tudo; o volume do banco é mantido
+docker compose --profile observability down -v   # para tudo e apaga o banco
+```
+
+O banco sobrevive ao `down`. Ao reexecutar o [`requests.http`](requests.http), as `Idempotency-Key` já usadas com outro payload retornam `422 idempotency_key_reused`: é a proteção de idempotência funcionando, não um erro. Use chaves novas ou comece de um banco limpo com `down -v`.
+
 ---
 
 ## Como testar
@@ -64,10 +87,35 @@ dotnet test
 
 Os testes de integração **não usam banco em memória** de propósito: concorrência, locks, constraints e triggers só existem no banco real.
 
+Rodando partes da suíte:
+
+```bash
+# Só os unitários (rápido, sem Docker)
+dotnet test --project tests/Ledger.UnitTests
+
+# Só os de integração
+dotnet test --project tests/Ledger.IntegrationTests
+
+# Uma classe ou um método
+dotnet test --project tests/Ledger.IntegrationTests --filter-class "*ConcurrencyTests"
+dotnet test --project tests/Ledger.IntegrationTests --filter-method "*NomeDoTeste*"
+
+# Como o CI: Release, warnings como erro
+dotnet build -c Release
+dotnet test -c Release --no-build
+```
+
 Sem Docker, aponte os testes de integração para um Postgres existente (banco vazio ou criado por este projeto):
 
 ```bash
+# bash
 export LEDGER_TEST_CONNECTION_STRING="Host=localhost;Database=ledger_tests;Username=ledger;Password=ledger_dev_only"
+dotnet test
+```
+
+```powershell
+# PowerShell
+$env:LEDGER_TEST_CONNECTION_STRING = "Host=localhost;Database=ledger_tests;Username=ledger;Password=ledger_dev_only"
 dotnet test
 ```
 
@@ -149,6 +197,7 @@ Todos os erros seguem **RFC 9457 (Problem Details)**, com `code` estável e `tra
 | Integração | Transactional outbox | Eventos nunca divergem do ledger; broker fora do ar não afeta escrita | [0007](docs/adr/0007-transactional-outbox.md) |
 | Segurança | JWT + escopos; ledger sem PII | Menor privilégio; superfície de exposição mínima | [0008](docs/adr/0008-seguranca.md) |
 | Sobrecarga | Rate limit por cliente, timeouts, falha rápida | Pico vira 429/503 rápido para alguns, não lentidão para todos | [failure-modes](docs/failure-modes.md) |
+| Observabilidade | OpenTelemetry exportando via OTLP; localmente para o Aspire Dashboard, em produção para Prometheus/Grafana ou Azure Monitor | Trocar de backend é configuração, sem mudar código | [arquitetura §8](docs/architecture.md#8-observabilidade) |
 
 ---
 
@@ -189,4 +238,3 @@ Priorizei a correção do núcleo (escrita concorrente, idempotência, posição
 8. **Broker real** no outbox (Azure Service Bus/Kafka) e **teste de contrato** dos eventos.
 9. **Role de banco com menor privilégio** (sem UPDATE/DELETE em `ledger_entries`) e migrations executadas por uma role separada no pipeline.
 10. **Bloqueio/desbloqueio de contas** via API (o status já existe no modelo e é respeitado na escrita).
-11. **Frontend de backoffice** (o protótipo foi desenhado, mas fica fora do escopo obrigatório).

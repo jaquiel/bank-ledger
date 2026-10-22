@@ -77,7 +77,8 @@ public static class ObservabilityExtensions
                 .AddMeter("Npgsql"))
             .WithLogging();
 
-        // Exporta para qualquer backend OTLP (Grafana, Jaeger, Azure Monitor via collector) quando configurado.
+        // Exporta via OTLP quando configurado: Aspire Dashboard localmente; em produção, collector para
+        // Prometheus/Grafana ou Azure Monitor. Trocar o destino é configuração, não código.
         if (!string.IsNullOrWhiteSpace(configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
         {
             telemetry.UseOtlpExporter();
