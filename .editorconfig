@@ -1,0 +1,29 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = true
+
+[*.{json,yml,yaml,xml,csproj,props,slnx}]
+indent_size = 2
+
+[*.cs]
+# Namespaces de arquivo e usings fora do namespace.
+csharp_style_namespace_declarations = file_scoped:warning
+dotnet_sort_system_directives_first = true
+
+# Supressões justificadas (cada uma é uma decisão, não preguiça):
+# CA2007 - ConfigureAwait: ASP.NET Core não tem SynchronizationContext; o atrito não compra nada.
+dotnet_diagnostic.CA2007.severity = none
+# CA1515 - Tornar tipos internal: a API pública dos projetos é consumida pelos testes e pela composição da API.
+dotnet_diagnostic.CA1515.severity = none
+
+[tests/**.cs]
+# CA1707 - Underscores em nomes de testes são a convenção mais legível (Metodo_Cenario_Resultado).
+dotnet_diagnostic.CA1707.severity = none
+# CA2234 - Overloads com Uri: strings relativas são idiomáticas com HttpClient em testes.
+dotnet_diagnostic.CA2234.severity = none

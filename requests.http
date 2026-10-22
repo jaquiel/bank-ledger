@@ -1,0 +1,91 @@
+# Roteiro executável da API (VS Code REST Client, Rider ou Visual Studio).
+# Pré-requisito: API rodando em Development (docker compose up, ou dotnet run).
+# Execute as requisições na ordem; as variáveis são preenchidas a partir das respostas anteriores.
+
+@baseUrl = http://localhost:8080
+
+### 1. Token de desenvolvimento (somente em Development)
+# @name token
+POST {{baseUrl}}/dev/token
+Content-Type: application/json
+
+{ "clientId": "avaliador", "scopes": ["ledger:read", "ledger:write"] }
+
+###
+@auth = Bearer {{token.response.body.accessToken}}
+
+### 2. Abrir conta
+# @name account
+POST {{baseUrl}}/v1/accounts
+Authorization: {{auth}}
+Content-Type: application/json
+
+{ "overdraftLimit": 0 }
+
+###
+@accountId = {{account.response.body.id}}
+
+### 3. Crédito (201 Created)
+# @name credit
+POST {{baseUrl}}/v1/accounts/{{accountId}}/movements
+Authorization: {{auth}}
+Idempotency-Key: deposito-001
+Content-Type: application/json
+
+{ "type": "credit", "amount": 1500.00, "description": "Salário" }
+
+### 4. MESMA requisição de novo: 200 OK + Idempotent-Replayed: true (nenhum novo lançamento)
+POST {{baseUrl}}/v1/accounts/{{accountId}}/movements
+Authorization: {{auth}}
+Idempotency-Key: deposito-001
+Content-Type: application/json
+
+{ "type": "credit", "amount": 1500.00, "description": "Salário" }
+
+### 5. Mesma chave, payload diferente: 422 idempotency_key_reused
+POST {{baseUrl}}/v1/accounts/{{accountId}}/movements
+Authorization: {{auth}}
+Idempotency-Key: deposito-001
+Content-Type: application/json
+
+{ "type": "credit", "amount": 9999.00 }
+
+### 6. Débito
+# @name debit
+POST {{baseUrl}}/v1/accounts/{{accountId}}/movements
+Authorization: {{auth}}
+Idempotency-Key: aluguel-2026-10
+Content-Type: application/json
+
+{ "type": "debit", "amount": 1200.00, "description": "Aluguel" }
+
+### 7. Débito acima do saldo: 422 insufficient_funds (nada é movimentado)
+POST {{baseUrl}}/v1/accounts/{{accountId}}/movements
+Authorization: {{auth}}
+Idempotency-Key: compra-grande
+Content-Type: application/json
+
+{ "type": "debit", "amount": 5000.00 }
+
+### 8. Saldo atual
+GET {{baseUrl}}/v1/accounts/{{accountId}}/balance
+Authorization: {{auth}}
+
+### 9. Saldo no instante do primeiro crédito (posição histórica)
+GET {{baseUrl}}/v1/accounts/{{accountId}}/balance?at={{credit.response.body.occurredAt}}
+Authorization: {{auth}}
+
+### 10. Estorno do débito (lançamento compensatório; o original permanece intacto)
+POST {{baseUrl}}/v1/accounts/{{accountId}}/movements/{{debit.response.body.id}}/reversal
+Authorization: {{auth}}
+Idempotency-Key: estorno-aluguel-2026-10
+
+### 11. Extrato (mais recente primeiro, paginado por cursor)
+GET {{baseUrl}}/v1/accounts/{{accountId}}/movements?limit=20
+Authorization: {{auth}}
+
+### 12. Sem token: 401
+GET {{baseUrl}}/v1/accounts/{{accountId}}/balance
+
+### 13. Health checks
+GET {{baseUrl}}/health/ready

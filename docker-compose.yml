@@ -1,0 +1,32 @@
+# Ambiente LOCAL de avaliação. Credenciais e chave de assinatura são de desenvolvimento,
+# propositalmente explícitas aqui. Em produção vêm de um cofre de segredos (ex.: Azure Key Vault).
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ledger
+      POSTGRES_USER: ledger
+      POSTGRES_PASSWORD: ledger_dev_only
+    ports:
+      - "5432:5432"
+    volumes:
+      - ledger-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ledger -d ledger"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  api:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Ledger: "Host=postgres;Port=5432;Database=ledger;Username=ledger;Password=ledger_dev_only"
+    ports:
+      - "8080:8080"
+
+volumes:
+  ledger-data:
