@@ -49,6 +49,39 @@ dotnet run --project src/Ledger.Api --launch-profile http
 
 A connection string de desenvolvimento está em `src/Ledger.Api/appsettings.Development.json` e aponta para `localhost:5432`.
 
+### Opção 3 — sem Docker, com um PostgreSQL existente
+
+Pré-requisitos: [.NET SDK 10](https://dotnet.microsoft.com/download) e um PostgreSQL acessível (o projeto é testado com a versão 17).
+
+O banco precisa existir e o usuário precisa poder criar objetos nele (o mais simples é ser o dono). Não há extensões nem nada que exija superusuário. Por exemplo, como administrador do Postgres:
+
+```sql
+CREATE ROLE ledger LOGIN PASSWORD 'ledger_dev_only';
+CREATE DATABASE ledger OWNER ledger;
+```
+
+Com esse banco e usuário em `localhost:5432`, basta rodar a API: ela usa os valores padrão de `appsettings.Development.json` e aplica as migrations na subida.
+
+```bash
+dotnet run --project src/Ledger.Api --launch-profile http
+```
+
+Para outro servidor ou outras credenciais, sobrescreva a connection string por variável de ambiente, sem editar arquivos:
+
+```bash
+# bash
+export ConnectionStrings__Ledger="Host=meu-servidor;Port=5432;Database=ledger;Username=ledger;Password=..."
+dotnet run --project src/Ledger.Api --launch-profile http
+```
+
+```powershell
+# PowerShell
+$env:ConnectionStrings__Ledger = "Host=meu-servidor;Port=5432;Database=ledger;Username=ledger;Password=..."
+dotnet run --project src/Ledger.Api --launch-profile http
+```
+
+Para os testes sem Docker, veja [Como testar](#como-testar).
+
 ### Observabilidade (opcional)
 
 Sobe junto o [.NET Aspire Dashboard](https://learn.microsoft.com/dotnet/aspire/fundamentals/dashboard/standalone), que recebe OTLP e mostra traces, métricas e logs da API:
